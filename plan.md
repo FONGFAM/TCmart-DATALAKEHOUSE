@@ -1,0 +1,29 @@
+01. CHỐT SOURCE DATABASE
+        ↓
+02. CHỐT DATA MODEL SOURCE
+        ↓
+03. THIẾT KẾ DATA GENERATOR / DỮ LIỆU MẪU
+        ↓
+04. DỰNG CÁC SOURCE DB
+        ↓
+05. XÂY SOURCE INGESTION
+        ↓
+06. BRONZE / RAW
+        ↓
+07. SILVER / STAGING
+        ↓
+08. DATA QUALITY
+        ↓
+09. DATA STEWARD / XỬ LÝ LỖI
+        ↓
+10. GOLD / LAKEHOUSE
+        ↓
+11. STAR + SNOWFLAKE + OLAP CUBE
+        ↓
+12. BI / DASHBOARD
+        ↓
+13. FORECAST
+        ↓
+14. ORCHESTRATION + MONITORING
+        ↓
+15. DEMO END-TO-END

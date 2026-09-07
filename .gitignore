@@ -1,0 +1,47 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# === Jupyter ===
+.ipynb_checkpoints/
+*.ipynb
+
+# === Docker / Môi trường ===
+infra/.env
+*.env
+!infra/.env.example
+
+# === Dữ liệu tạm / Generated ===
+data/
+tmp/
+output/
+*.csv
+*.xlsx
+*.parquet
+
+# === IDE ===
+.vscode/
+.idea/
+*.code-workspace
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Git ===
+*.orig
+
+# === Logs ===
+*.log
+logs/
