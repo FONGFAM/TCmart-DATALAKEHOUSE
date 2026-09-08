@@ -11,13 +11,13 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../infra/.en
 # ─── Connection Strings ───────────────────────────────────────────────────────
 
 # SQL Server — retail_pos_db (T-SQL)
-MSSQL_URL = (
-    "mssql+pyodbc://sa:{password}@localhost:1433/retail_pos_db"
-    "?driver=ODBC+Driver+17+for+SQL+Server"
-).format(password=os.getenv("SA_PASSWORD", "TCMart@2026!Strong"))
+import urllib.parse
+MSSQL_URL = "mssql+pymssql://sa:{password}@localhost:1433/retail_pos_db".format(
+    password=urllib.parse.quote_plus(os.getenv("SA_PASSWORD", "TCMart@2026!Strong"))
+)
 
 # PostgreSQL — 8 databases (dùng chung 1 server, tách schema/db)
-PG_BASE_URL = "postgresql+psycopg2://{user}:{password}@localhost:5432/{db}".format(
+PG_BASE_URL = "postgresql+psycopg2://{user}:{password}@localhost:5433/{db}".format(
     user=os.getenv("POSTGRES_USER", "tcmart"),
     password=os.getenv("POSTGRES_PASSWORD", "tcmart2026"),
     db="{db}",

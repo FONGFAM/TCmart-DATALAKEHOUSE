@@ -36,7 +36,10 @@ up-sources: ram-check ## [PHASE 1] Bật Source DBs: MSSQL + Postgres + MinIO (~
 	docker compose -f $(INFRA_DIR)/sources/docker-compose.yml \
 		--env-file $(INFRA_DIR)/.env \
 		--profile sources up -d
-	@echo "$(GREEN)✅ Source DBs đang khởi động. Chờ ~60s để MSSQL sẵn sàng.$(NC)"
+	@echo "$(GREEN)⏳ Chờ MSSQL khởi động để tự động chạy Init Script... (30s)$(NC)"
+	@sleep 30
+	@docker exec tcmart-mssql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'TCMart@2026!Strong' -i /docker-entrypoint-initdb.d/retail_pos_db.sql || echo "Cần chạy bằng tay nếu MSSQL chưa sẵn sàng."
+	@echo "$(GREEN)✅ Source DBs đã khởi tạo xong!$(NC)"
 
 up-oracle: ## [PHASE 1+] Bật Oracle XE (nặng ~2 GB — chỉ bật khi cần!)
 	@echo "$(RED)⚠️  Oracle XE sẽ dùng thêm ~2GB RAM!$(NC)"

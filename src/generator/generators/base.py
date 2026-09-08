@@ -35,7 +35,16 @@ class BaseGenerator(ABC):
     def truncate_table(self, table_name: str) -> None:
         """Xóa dữ liệu cũ trước khi generate (idempotent)."""
         with self.engine.connect() as conn:
-            conn.execute(text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE"))
+            dialect = self.engine.dialect.name
+            if dialect == "postgresql":
+                conn.execute(text(f"TRUNCATE TABLE {table_name} RESTART IDENTITY CASCADE"))
+            elif dialect == "mssql":
+                # T-SQL does not support CASCADE on TRUNCATE, so we use DELETE
+                conn.execute(text(f"DELETE FROM {table_name}"))
+            elif dialect == "oracle":
+                conn.execute(text(f"DELETE FROM {table_name}"))
+            else:
+                conn.execute(text(f"DELETE FROM {table_name}"))
             conn.commit()
 
     def status_choices(self) -> str:
