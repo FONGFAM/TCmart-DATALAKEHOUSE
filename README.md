@@ -57,8 +57,8 @@ Orchestration & Monitoring
 ✅ 02. CHỐT DATA MODEL SOURCE        08. DATA QUALITY
 ✅ 03. THIẾT KẾ DATA GENERATOR       09. DATA STEWARD / XỬ LÝ LỖI
 ✅ 04. DỰNG CÁC SOURCE DB            10. GOLD / LAKEHOUSE
-⏳ 05. XÂY SOURCE INGESTION          11. STAR + SNOWFLAKE + OLAP CUBE
-   06. BRONZE / RAW                  12. BI / DASHBOARD
+✅ 05. XÂY SOURCE INGESTION          11. STAR + SNOWFLAKE + OLAP CUBE
+✅ 06. BRONZE / RAW                  12. BI / DASHBOARD
                                      13. FORECAST
                                      14. ORCHESTRATION + MONITORING
                                      15. DEMO END-TO-END
@@ -80,7 +80,7 @@ TCmart-DATALAKEHOUSE/
 │   ├─ generator/                     # Bộ Python scripts sinh dữ liệu giả lập cho 12 DBs
 │   ├─ orchestration/                 # Airflow DAGs (Ingestion, Bronze, Silver, Gold)
 │   ├─ processing/                    # Spark jobs (Java/Python) xử lý dữ liệu
-│   └─ ingestion/                     # Kafka connect, NiFi templates
+│   └─ ingestion/                     # Python scripts (Boto3, Pandas) đẩy data lên MinIO (Bronze Layer)
 ├─ Makefile                           # Tập hợp các phím tắt terminal (make up-sources, make gen-all...)
 └─ plan.md                            # Tracking tiến độ dự án chi tiết
 ```
@@ -126,9 +126,20 @@ make up-oracle
 
 # Sinh dữ liệu tự động vào 12 CSDL (Chạy kịch bản Python)
 make gen-all
+
+### 3. Đẩy dữ liệu lên Data Lake - Lớp Bronze (Phase 2)
+
+```bash
+# Đẩy dữ liệu từ file (Excel, JSON, XML) lên MinIO
+python src/ingestion/ingest_files.py
+
+# Đẩy dữ liệu từ Database (PostgreSQL, MSSQL, Oracle) lên MinIO bằng Parquet
+python src/ingestion/ingest_postgres.py
+python src/ingestion/ingest_mssql.py
+# python src/ingestion/ingest_oracle.py (Chỉ chạy khi bật Oracle)
 ```
 
-### 3. Khởi động Data Lakehouse & Orchestration (Phase 2)
+### 4. Khởi động Data Lakehouse & Orchestration (Phase 3)
 
 ```bash
 # Khởi động Airflow và ClickHouse
