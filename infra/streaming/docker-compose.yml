@@ -1,0 +1,91 @@
+# ============================================================
+# PHASE 2 — Streaming Layer (Kafka + Spark)
+# RAM estimate: ~3 GB thêm vào Pha 1 → tổng ~7 GB
+# Yêu cầu: Pha 1 đã up. Chạy sau khi sources ổn định.
+# Start: docker compose -f infra/streaming/docker-compose.yml up -d
+# ============================================================
+
+name: tcmart-streaming
+
+services:
+
+  # ─── Zookeeper ───────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: tcmart-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    mem_limit: 256m
+    mem_reservation: 128m
+    cpus: 0.25
+    restart: unless-stopped
+
+  # ─── Kafka Broker ────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: tcmart-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Giới hạn log retention để tiết kiệm disk
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+    ports:
+      - "29092:29092"   # Kết nối từ host
+      - "9092:9092"     # Kết nối nội bộ container
+    mem_limit: 768m
+    mem_reservation: 384m
+    cpus: 0.75
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Spark Master ─────────────────────────────────────────
+  spark-master:
+    image: bitnami/spark:3.5
+    container_name: tcmart-spark-master
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+    ports:
+      - "8090:8080"   # Spark UI (dùng 8090 tránh conflict Airflow)
+      - "7077:7077"   # Spark Master
+    mem_limit: 1g
+    mem_reservation: 512m
+    cpus: 0.5
+    restart: unless-stopped
+
+  # ─── Spark Worker (1 worker DUY NHẤT) ─────────────────────
+  # ⚠️  Chỉ 1 worker. Không thêm worker khi RAM < 5GB.
+  spark-worker:
+    image: bitnami/spark:3.5
+    container_name: tcmart-spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 512M        # Giới hạn chặt
+      SPARK_WORKER_CORES: 1            # Chỉ 1 core
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+    mem_limit: 1.5g
+    mem_reservation: 1g
+    cpus: 1.0
+    restart: unless-stopped

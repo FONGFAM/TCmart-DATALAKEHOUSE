@@ -1,0 +1,115 @@
+# ============================================================
+# PHASE 1 — Source Databases Only
+# RAM estimate: ~4.5 GB
+# Start with: docker compose -f infra/sources/docker-compose.yml up -d
+# ============================================================
+
+name: tcmart-sources
+
+services:
+
+  # ─── Microsoft SQL Server — retail_pos_db ───────────────
+  mssql-source:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: tcmart-mssql
+    profiles: [sources]
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD:-TCMart@2026!Strong}
+      MSSQL_PID: Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+      - ./init-scripts/sqlserver:/docker-entrypoint-initdb.d:ro
+    mem_limit: 1.5g
+    mem_reservation: 1g
+    cpus: 1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $$SA_PASSWORD -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ─── PostgreSQL — 8 databases (schemas) ─────────────────
+  postgres-source:
+    image: postgres:15-alpine
+    container_name: tcmart-postgres
+    profiles: [sources]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tcmart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tcmart2026}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d:ro
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tcmart}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Oracle XE — procurement_db, warehouse_db, production_db ─
+  # ⚠️  NẶNG NHẤT: ~2GB RAM. Chỉ bật khi cần test Oracle cụ thể!
+  # Tắt ngay sau khi test: docker compose stop oracle-source
+  oracle-source:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: tcmart-oracle
+    profiles: [oracle]   # Tách profile riêng — KHÔNG tự động bật
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-TCMart2026}
+      APP_USER: ${ORACLE_APP_USER:-tcmart}
+      APP_USER_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-tcmart2026}
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+      - ./init-scripts/oracle:/container-entrypoint-initdb.d:ro
+    mem_limit: 2g
+    mem_reservation: 1.5g
+    cpus: 1.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 180s
+
+  # ─── MinIO — Object Storage (S3 compatible) ──────────────
+  minio:
+    image: minio/minio:latest
+    container_name: tcmart-minio
+    profiles: [sources]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin2026}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web Console
+    volumes:
+      - minio_data:/data
+    mem_limit: 512m
+    mem_reservation: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mssql_data:
+  postgres_data:
+  oracle_data:
+  minio_data:
