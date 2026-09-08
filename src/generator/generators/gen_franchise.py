@@ -6,7 +6,7 @@ import sys
 import os
 import random
 from sqlalchemy import text
-from datetime import timedelta
+from datetime import timedelta, date
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from config import PG_BASE_URL, GEN_CONFIG
@@ -120,6 +120,38 @@ class FranchiseGenerator(BaseGenerator):
                     
             session.commit()
             print(f" - Inserted {num_orders} franchise orders.")
+
+            # 3. Franchise Monthly Reports (Excel Files)
+            print(" - Generating Excel reports for franchise monthly revenue...")
+            import pandas as pd
+            
+            output_dir = os.path.join(os.path.dirname(__file__), "../../../data/raw/franchise_reports")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            months = [date.today().replace(day=1) - timedelta(days=30*i) for i in range(6)]
+            
+            for m in months:
+                report_data = []
+                for fid in franchisee_ids:
+                    rev = random.randint(100, 1000) * 1000000
+                    exp = rev * random.uniform(0.6, 0.85)
+                    prof = rev - exp
+                    cust = random.randint(500, 5000)
+                    report_data.append({
+                        "Franchisee_ID": fid,
+                        "Report_Month": m.strftime("%Y-%m"),
+                        "Total_Revenue_VND": rev,
+                        "Total_Expenses_VND": exp,
+                        "Net_Profit_VND": prof,
+                        "Customer_Count": cust,
+                        "Notes": f"Report for {m.strftime('%B %Y')}"
+                    })
+                
+                df = pd.DataFrame(report_data)
+                filename = os.path.join(output_dir, f"franchise_report_{m.strftime('%Y_%m')}.xlsx")
+                df.to_excel(filename, index=False)
+                
+            print(f" - Exported {len(months)} Excel report files to data/raw/franchise_reports.")
 
 
 if __name__ == "__main__":

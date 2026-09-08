@@ -3,13 +3,15 @@ gen_exchange_rate.py — Data Generator cho exchange_rate_db
 """
 import sys
 import os
-from datetime import timedelta
+# pyrefly: ignore [missing-import]
+import yfinance as yf
+import pandas as pd
+from datetime import timedelta, date
 from sqlalchemy import text
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from config import PG_BASE_URL, GEN_CONFIG
+from config import PG_BASE_URL
 from generators.base import BaseGenerator
-
 
 class ExchangeRateGenerator(BaseGenerator):
     def __init__(self):
@@ -40,31 +42,55 @@ class ExchangeRateGenerator(BaseGenerator):
             session.commit()
             print(f" - Inserted {len(currencies)} currencies.")
 
-        # 2. Exchange Rates
-        # Giả lập lịch sử tỷ giá USD -> VND và CNY -> VND trong 365 ngày qua
-        records = min(1000, 365)
+        # 2. Exchange Rates using Yahoo Finance
+        # Fetch 1 year of historical data
         rates = []
-        
-        base_usd_vnd = 25000.0
-        base_cny_vnd = 3500.0
-        
-        start_date = self.fake.date_between(start_date='-1y', end_date='today')
-        
-        for i in range(records):
-            current_date = start_date + timedelta(days=i)
-            # Random fluctuation +/- 100 VND
-            usd_rate = base_usd_vnd + self.fake.pyfloat(min_value=-100, max_value=100)
-            cny_rate = base_cny_vnd + self.fake.pyfloat(min_value=-50, max_value=50)
+        try:
+            print(" - Fetching real exchange rates from Yahoo Finance...")
+            usd_vnd = yf.download("USDVND=X", period="1y", interval="1d", progress=False)
+            cny_vnd = yf.download("CNYVND=X", period="1y", interval="1d", progress=False)
             
-            rates.append({
-                "from_currency": "USD", "to_currency": "VND", "rate": usd_rate, 
-                "rate_date": current_date, "source": "Vietcombank"
-            })
-            rates.append({
-                "from_currency": "CNY", "to_currency": "VND", "rate": cny_rate, 
-                "rate_date": current_date, "source": "Vietcombank"
-            })
+            # Format USD
+            if not usd_vnd.empty:
+                # yfinance returns multi-index columns in newer versions, flatten them
+                if isinstance(usd_vnd.columns, pd.MultiIndex):
+                    usd_vnd.columns = usd_vnd.columns.get_level_values(0)
+                
+                for dt, row in usd_vnd.iterrows():
+                    rates.append({
+                        "from_currency": "USD", "to_currency": "VND", 
+                        "rate": float(row['Close']), 
+                        "rate_date": dt.date(), 
+                        "source": "Yahoo Finance"
+                    })
             
+            # Format CNY
+            if not cny_vnd.empty:
+                if isinstance(cny_vnd.columns, pd.MultiIndex):
+                    cny_vnd.columns = cny_vnd.columns.get_level_values(0)
+                
+                for dt, row in cny_vnd.iterrows():
+                    rates.append({
+                        "from_currency": "CNY", "to_currency": "VND", 
+                        "rate": float(row['Close']), 
+                        "rate_date": dt.date(), 
+                        "source": "Yahoo Finance"
+                    })
+        except Exception as e:
+            print(f" - Warning: Failed to fetch real data ({e}), falling back to mock data.")
+            # Fallback
+            base_usd_vnd = 25000.0
+            base_cny_vnd = 3500.0
+            
+            start_date = date.today() - timedelta(days=365)
+            for i in range(365):
+                current_date = start_date + timedelta(days=i)
+                usd_rate = base_usd_vnd + self.fake.pyfloat(min_value=-100, max_value=100)
+                cny_rate = base_cny_vnd + self.fake.pyfloat(min_value=-50, max_value=50)
+                
+                rates.append({"from_currency": "USD", "to_currency": "VND", "rate": usd_rate, "rate_date": current_date, "source": "Mock"})
+                rates.append({"from_currency": "CNY", "to_currency": "VND", "rate": cny_rate, "rate_date": current_date, "source": "Mock"})
+
         with self.get_session() as session:
             for r in rates:
                 session.execute(
@@ -76,7 +102,6 @@ class ExchangeRateGenerator(BaseGenerator):
                 )
             session.commit()
             print(f" - Inserted {len(rates)} exchange_rates.")
-
 
 if __name__ == "__main__":
     generator = ExchangeRateGenerator()

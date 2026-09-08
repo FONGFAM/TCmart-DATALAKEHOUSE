@@ -54,6 +54,13 @@ class InvoiceGenerator(BaseGenerator):
             return
             
         with self.get_session() as session:
+            import xml.etree.ElementTree as ET
+            from xml.dom import minidom
+            
+            output_dir = os.path.join(os.path.dirname(__file__), "../../../data/raw/e_invoices")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            xml_count = 0
             for o in all_orders:
                 # Bỏ qua 20% đơn hàng không lấy hóa đơn
                 if random.random() < 0.2:
@@ -63,6 +70,12 @@ class InvoiceGenerator(BaseGenerator):
                 tax_amt = total_amt * 0.08 # 8% VAT
                 subtotal = total_amt - tax_amt
                 
+                inv_num = f"INV-{o['date'].strftime('%Y%m%d')}-{self.fake.unique.random_number(digits=5)}"
+                xml_filename = f"{inv_num}.xml"
+                buyer_name = self.fake.company() if random.random() > 0.5 else self.fake.name()
+                buyer_tax = self.fake.numerify(text="03########")
+                
+                # Insert DB
                 res = session.execute(
                     text("""
                         INSERT INTO invoices (invoice_number, invoice_type, invoice_date, seller_tax_code, buyer_tax_code, buyer_name, currency_code, subtotal, tax_amount, total_amount, xml_file_name, status)
@@ -70,16 +83,16 @@ class InvoiceGenerator(BaseGenerator):
                         RETURNING invoice_id
                     """),
                     {
-                        "num": f"INV-{o['date'].strftime('%Y%m%d')}-{self.fake.unique.random_number(digits=5)}",
+                        "num": inv_num,
                         "type": "VAT",
                         "date": o["date"],
                         "stax": "0312345678", # Mã số thuế TCMart
-                        "btax": self.fake.numerify(text="03########"),
-                        "name": self.fake.company() if random.random() > 0.5 else self.fake.name(),
+                        "btax": buyer_tax,
+                        "name": buyer_name,
                         "sub": subtotal,
                         "tax": tax_amt,
                         "total": total_amt,
-                        "xml": f"{o['num']}.xml"
+                        "xml": xml_filename
                     }
                 )
                 inv_id = res.scalar()
@@ -102,8 +115,33 @@ class InvoiceGenerator(BaseGenerator):
                     {"iid": inv_id, "sub": subtotal, "tax": tax_amt}
                 )
                 
+                # Xuất XML
+                root = ET.Element("Invoice")
+                ET.SubElement(root, "InvoiceNumber").text = inv_num
+                ET.SubElement(root, "IssueDate").text = o["date"].strftime('%Y-%m-%d')
+                
+                seller = ET.SubElement(root, "Seller")
+                ET.SubElement(seller, "TaxCode").text = "0312345678"
+                ET.SubElement(seller, "Name").text = "TC MART"
+                
+                buyer = ET.SubElement(root, "Buyer")
+                ET.SubElement(buyer, "TaxCode").text = buyer_tax
+                ET.SubElement(buyer, "Name").text = buyer_name
+                
+                payment = ET.SubElement(root, "Payment")
+                ET.SubElement(payment, "SubTotal").text = str(round(subtotal, 2))
+                ET.SubElement(payment, "TaxAmount").text = str(round(tax_amt, 2))
+                ET.SubElement(payment, "TotalAmount").text = str(round(total_amt, 2))
+                ET.SubElement(payment, "Currency").text = "VND"
+                
+                # Pretty print and save
+                xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
+                with open(os.path.join(output_dir, xml_filename), "w", encoding="utf-8") as f:
+                    f.write(xmlstr)
+                xml_count += 1
+                
             session.commit()
-            print(f" - Inserted invoices cho {len(all_orders)} đơn hàng.")
+            print(f" - Inserted {xml_count} invoices into DB and exported {xml_count} XML files to data/raw/e_invoices.")
 
 if __name__ == "__main__":
     generator = InvoiceGenerator()

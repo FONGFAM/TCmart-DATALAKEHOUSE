@@ -35,6 +35,7 @@ class MarketingGenerator(BaseGenerator):
         self.truncate_table("campaigns")
         
         with self.get_session() as session:
+            api_data = []
             num_campaigns = GEN_CONFIG.get("num_campaigns", 30)
             for i in range(1, num_campaigns + 1):
                 start_date = self.fake.date_time_this_year()
@@ -81,23 +82,32 @@ class MarketingGenerator(BaseGenerator):
                         click = int(impr * random.uniform(0.01, 0.1)) # 1-10% CTR
                         cost = click * random.randint(1000, 10000) # CPC 1k-10k
                         
-                        session.execute(
-                            text("INSERT INTO impressions (campaign_id, channel_id, event_time, impression_count) VALUES (:cid, :chid, :time, :cnt)"),
-                            {"cid": camp_id, "chid": chan_id, "time": current_date, "cnt": impr}
-                        )
-                        session.execute(
-                            text("INSERT INTO clicks (campaign_id, channel_id, event_time, click_count) VALUES (:cid, :chid, :time, :cnt)"),
-                            {"cid": camp_id, "chid": chan_id, "time": current_date, "cnt": click}
-                        )
-                        session.execute(
-                            text("INSERT INTO campaign_costs (campaign_id, channel_id, cost_date, amount, currency_code) VALUES (:cid, :chid, :date, :amt, 'VND')"),
-                            {"cid": camp_id, "chid": chan_id, "date": current_date, "amt": cost}
-                        )
+                        api_data.append({
+                            "campaign_id": camp_id,
+                            "channel_id": chan_id,
+                            "channel_name": ch,
+                            "date": current_date.strftime('%Y-%m-%d'),
+                            "impressions": impr,
+                            "clicks": click,
+                            "spend": cost,
+                            "currency": "VND"
+                        })
                         
                     current_date += timedelta(days=1)
                 
             session.commit()
-            print(f" - Inserted {num_campaigns} marketing campaigns with metrics.")
+            print(f" - Inserted {num_campaigns} marketing campaigns.")
+
+            # Xuất JSON
+            import json
+            output_dir = os.path.join(os.path.dirname(__file__), "../../../data/raw/marketing_ads")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            output_file = os.path.join(output_dir, f"social_ads_metrics_{date.today().strftime('%Y%m%d')}.json")
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump({"status": "success", "data": api_data}, f, ensure_ascii=False, indent=2)
+                
+            print(f" - Exported {len(api_data)} daily metrics to JSON: {output_file}")
 
 if __name__ == "__main__":
     generator = MarketingGenerator()
