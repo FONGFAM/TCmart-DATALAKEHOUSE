@@ -507,3 +507,83 @@ Ban điều hành chuỗi siêu thị TC Mart cần trả lời 4 bài toán kin
 
 
 Xây dựng trọn vẹn bài toán này giúp bạn sở hữu một pipeline chuẩn chỉnh: từ trích xuất RDBMS, kiểm định chất lượng tự động, mô hình hóa Star Schema cho đến trực quan hóa BI và mô hình học máy dự báo nhu cầu.
+
+
+Đoạn chat 3: 
+Bài toán gắn liền nhất với thực tế vận hành chuỗi siêu thị tại Việt Nam hiện nay là: **"Tự động hóa quy trình đối soát thanh toán đa phương thức (Tiền mặt, VietQR, Ví điện tử, Ngoại tệ) và phát hiện chênh lệch ca kíp thu ngân"**.
+
+---
+
+**1. Bối Cảnh Thực Tế Tại Các Siêu Thị Việt Nam (WinMart, Co.opmart, Bách Hóa Xanh)**
+
+* **Bùng nổ thanh toán không tiền mặt:** Khách hàng Việt Nam hiếm khi thanh toán thuần túy bằng một kênh. Trong cùng một quầy thu ngân, khách có thể trả tiền mặt, quét mã VietQR động, quẹt ví MoMo/ZaloPay, hoặc khách du lịch quốc tế thanh toán bằng USD/CNY tại các đô thị lớn như Hà Nội, Đà Nẵng, TP.HCM.
+
+
+* **Áp lực đóng ca lúc 22h00:** Bài toán đau đầu nhất mỗi tối của cửa hàng trưởng và kế toán là ngồi đếm tiền két vật lý, so khớp với sao kê ngân hàng và bảng kê POS. Tình trạng thâm hụt tiền két diễn ra liên tục do: thu ngân thối nhầm tiền mặt, khách quét VietQR nhưng app ngân hàng bị nghẽn mạng (tiền chưa nổi tài khoản nhưng bill đã in), hoặc áp nhầm tỷ giá ngoại tệ.
+
+
+
+---
+
+**2. Thiết Kế Luồng Kỹ Thuật Data Engineering Cho Bài Toán**
+
+**Trích xuất & Lưu trữ Thô (Bronze Zone - MinIO)**
+
+* Kéo dữ liệu định kỳ mỗi giờ qua kết nối JDBC từ SQL Server (DB Retail) vào bucket MinIO dưới dạng tệp Parquet:
+
+
+* `cashier_shifts`: Thông tin phiên làm việc, mã thu ngân, tiền lẻ đầu ca (`opening_cash_float`), tiền mặt thực đếm kết ca (`actual_closing_cash`).
+
+
+* `sales_invoices` & `sales_payment_tenders`: Chi tiết hóa đơn và phân bổ thanh toán (`payment_method`, `currency_code`, `exchange_rate`, `tender_amount_vnd`).
+
+
+
+
+
+**Cổng Kiểm Soát Chất Lượng & Chuyển Đổi (Silver Zone - PySpark & Great Expectations)**
+
+* **Xử lý đa tiền tệ:** Ánh xạ tỷ giá hối đoái, tự động quy đổi giao dịch USD/CNY về chuẩn VND: $\text{amount\_vnd} = \text{tender\_amount\_original} \times \text{exchange\_rate}$.
+
+
+* **Data Quality Gate:** Bắt lỗi giao dịch ngoại tệ có `exchange_rate <= 0` hoặc ngày lập hóa đơn ở tương lai. Các bản ghi lỗi lập tức bị đẩy sang vùng cách ly (Quarantine Zone) để kiểm soát viên xử lý trên Data Steward Portal.
+
+
+* **Logic đối soát ca kíp:** PySpark tính toán tự động tổng tiền lý thuyết phải thu của từng phương thức theo từng `shift_id`:
+
+
+
+$$\text{cash\_variance} = \text{actual\_closing\_cash} - (\text{opening\_cash\_float} + \sum \text{CASH\_sales})$$
+
+
+
+Nếu $\vert{}\text{cash\_variance}\vert{} > 50.000\text{ VND}$, hệ thống tự động gắn nhãn cờ đỏ `ANOMALY_DEFICIT` hoặc `ANOMALY_SURPLUS`.
+
+
+
+**Mô Hình Data Mart Phân Tích (Gold Zone - ClickHouse)**
+
+* **Bảng Fact trung tâm:** `Fact_CashierShiftReconciliation` (chứa các chỉ số chênh lệch tiền mặt, tỷ lệ thanh toán QR/Ví điện tử, số lượng hóa đơn/ca) và `Fact_StoreSales` (chi tiết từng mặt hàng).
+
+
+* **Bảng Dimension:** `Dim_Store`, `Dim_Cashier`, `Dim_PaymentMethod`, và `Dim_Date`.
+
+
+
+---
+
+**3. Kết Hợp Mở Rộng Cho Đề Cương Đồ Án (Module Dự Báo Nhu Cầu - Machine Learning)**
+
+Nếu đề cương yêu cầu mô hình học máy (Prophet / SARIMA), bạn có thể gắn thêm bài toán đặc thù Việt Nam: **Dự báo sản lượng tiêu thụ hàng hóa thiết yếu theo nhịp Lễ Tết và Lịch Âm**.
+
+* Tại Việt Nam, sức mua thực phẩm tươi sống và FMCG phụ thuộc rất lớn vào chu kỳ Lịch Âm (ngày Rằm, Mùng 1, Tết Đoan Ngọ, Tết Trung Thu, Tết Nguyên Đán).
+
+
+* Bổ sung trường `lunar_day`, `lunar_month` và gắn cờ `is_vietnam_holiday` vào `Dim_Date`.
+
+
+* Dùng PySpark trích xuất chuỗi doanh số lịch sử sạch từ ClickHouse cấp vào mô hình Prophet để dự báo nhu cầu hàng tươi sống cho 7 ngày tới, giúp cửa hàng trưởng lên đơn nhập hàng vừa đủ, tránh ế hỏng.
+
+
+
+Mô hình này vừa gắn chặt với thực tế bán lẻ tại Việt Nam, vừa chứng minh trọn vẹn năng lực xử lý dữ liệu lớn, kiểm định chất lượng dữ liệu và kiến trúc Lakehouse hiện đại.

@@ -7,7 +7,7 @@ These rules govern the behavior of the AI Agent (Antigravity) while working in t
 - **Shell**: Use `zsh` conventions for any shell commands.
 - **Package Management**: Recommend or use `brew` (Homebrew) for installing dependencies if they are missing on the host.
 - **Python**: Always use `python3.10` to create virtual environments (`python3.10 -m venv .venv`). Do NOT use the default `python3` (which is 3.9 on this host). Ensure the virtual environment is activated before running any python scripts or installing `pip` packages.
-- **Java**: The host uses Java 17 via `/Library/Java/JavaVirtualMachines/jdk-17.0.20.1.jdk`. Ensure `JAVA_HOME` is set appropriately when executing Spark, NiFi, or Airflow locally outside Docker.
+- **Java**: The host uses Java 17 via `/Library/Java/JavaVirtualMachines/jdk-17.0.20.1.jdk`. Ensure `JAVA_HOME` is set appropriately when executing Spark, or Airflow locally outside Docker.
 - **Paths**: Use macOS forward slash (`/`) paths. 
 
 ## 2. Project Architecture & Standards

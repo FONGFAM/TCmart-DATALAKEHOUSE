@@ -1,10 +1,21 @@
-# ADR 002: Chọn Kafka làm Message Broker
+# ADR 002: Bỏ Kafka — Dùng Airflow + PySpark JDBC
 
 ## Quyết định
-Dùng Kafka làm lớp trung gian giữa Source DB và ClickHouse Bronze thay vì kết nối JDBC trực tiếp.
+Không sử dụng Kafka. Ingestion từ SQL Server lên MinIO sẽ do **Airflow DAG điều phối + PySpark đọc qua JDBC**.
 
 ## Lý do
-- Tách biệt Source và Sink (loose coupling)
-- Cho phép nhiều consumer xử lý cùng 1 event stream
-- Replay event khi pipeline bị lỗi (retention 24h)
-- Mô phỏng kiến trúc thực tế của hệ thống bán lẻ lớn
+- Bài toán là Batch ingestion định kỳ mỗi giờ, **không phải real-time streaming** → Kafka là over-engineering.
+- Kafka + Zookeeper tốn thêm ~1GB RAM trên máy 16GB — không chấp nhận được.
+- PySpark JDBC trực tiếp đơn giản hơn, dễ debug, dễ bảo trì hơn cho đồ án.
+- Airflow đã đủ vai trò orchestration, không cần message broker bổ sung.
+
+## Luồng thay thế
+```
+SQL Server (retail_pos_db)
+    │
+    ▼ Airflow DAG (JDBC Batch, mỗi giờ)
+MinIO (Raw Zone — Parquet files)
+    │
+    ▼ PySpark Job (Silver Transformation)
+ClickHouse (Bronze → Silver → Gold)
+```
