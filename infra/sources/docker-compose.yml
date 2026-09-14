@@ -1,14 +1,14 @@
 # ============================================================
-# PHASE 1 — Source Databases Only
-# RAM estimate: ~4.5 GB
-# Start with: docker compose -f infra/sources/docker-compose.yml up -d
+# PHASE 1 — Source Databases Only (SQL Server POS)
+# RAM estimate: ~1.5 GB
+# Start with: docker compose -f infra/sources/docker-compose.yml --profile sources up -d
 # ============================================================
 
 name: tcmart-sources
 
 services:
 
-  # ─── Microsoft SQL Server — retail_pos_db ───────────────
+  # ─── Microsoft SQL Server — retail_pos_db (14 tables) ────────
   mssql-source:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: tcmart-mssql
@@ -33,58 +33,7 @@ services:
       retries: 5
       start_period: 60s
 
-  # ─── PostgreSQL — 8 databases (schemas) ─────────────────
-  postgres-source:
-    image: postgres:15-alpine
-    container_name: tcmart-postgres
-    profiles: [sources]
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-tcmart}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tcmart2026}
-      POSTGRES_DB: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts/postgres:/docker-entrypoint-initdb.d:ro
-    mem_limit: 512m
-    mem_reservation: 256m
-    cpus: 0.5
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tcmart}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─── Oracle XE — procurement_db, warehouse_db, production_db ─
-  # ⚠️  NẶNG NHẤT: ~2GB RAM. Chỉ bật khi cần test Oracle cụ thể!
-  # Tắt ngay sau khi test: docker compose stop oracle-source
-  oracle-source:
-    image: gvenzl/oracle-xe:21-slim
-    container_name: tcmart-oracle
-    profiles: [oracle]   # Tách profile riêng — KHÔNG tự động bật
-    environment:
-      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-TCMart2026}
-      APP_USER: ${ORACLE_APP_USER:-tcmart}
-      APP_USER_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-tcmart2026}
-    ports:
-      - "1521:1521"
-    volumes:
-      - oracle_data:/opt/oracle/oradata
-      - ./init-scripts/oracle:/container-entrypoint-initdb.d:ro
-    mem_limit: 2g
-    mem_reservation: 1.5g
-    cpus: 1.0
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 30s
-      timeout: 20s
-      retries: 10
-      start_period: 180s
-
-  # ─── MinIO — Object Storage (S3 compatible) ──────────────
+  # ─── MinIO — Object Storage (Raw Zone) ──────────────
   minio:
     image: minio/minio:latest
     container_name: tcmart-minio
@@ -110,6 +59,4 @@ services:
 
 volumes:
   mssql_data:
-  postgres_data:
-  oracle_data:
   minio_data:

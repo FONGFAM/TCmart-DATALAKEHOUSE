@@ -1,0 +1,229 @@
+Table Change Log
+
+Chương I. Design
+Data Source là gì ?
+Data Source là những API được cung cấp từ các tổ chức chuyên cung cấp dữ liệu và API cho thị trường tài chính. Gồm các API sau:
+sec-api.io: API này giúp chúng ta truy xuất danh sách các công ty hiện đang có mặt trên các thị trường chứng khoán Nyse, Nasdaq
+https://sec-api.io/docs/mapping-api/list-companies-by-exchange
+Alpha Vantage API for market status: API này giúp chúng ta truy xuất danh sách các thị trường chứng khoán trên toàn thế giới.
+https://www.alphavantage.co/documentation/#market-status
+Alpha Vantage API for news sentiment: API này giúp chúng ta truy xuất dữ liệu tin tức về thị trường, cùng với dữ liệu sentiment từ một loạt các nguồn tin hàng đầu trên toàn thế giới.
+https://www.alphavantage.co/documentation/#news-sentiment
+Polygon: API này giúp chúng ta truy xuất giá mở cửa, cao nhất, thấp nhất và đóng cửa hàng ngày (OHLC) cho toàn bộ cổ phiếu trên thị trường chứng khoán tại Mỹ.
+https://polygon.io/docs/stocks/get_v2_aggs_ticker__stocksticker__range__multiplier___timespan___from___to
+Dữ liệu trả về từ API là gì ?
+sec-api.io: 
+API sẽ trả về cho ta một file JSON với các thuộc tính mô tả thông tin của công ty:
+name: Tên của công ty. 
+ticker: Ký hiệu công ty trên sàn giao dịch chứng khoán
+cik: Mã CIK (Central Index Key)
+cusip: Số CUSIP
+exchange: Sàn giao dịch nơi cổ phiếu của công ty được giao dịch
+isDelisted: Một giá trị boolean cho biết liệu cổ phiếu của công ty đã bị loại khỏi sàn giao dịch hay không. 
+category: Mô tả hạng mục của cổ phiếu của công ty
+sector: Ngành của công ty
+industry: Ngành cụ thể mà công ty hoạt động
+sic: Mã phân loại ngành công nghiệp tiêu chuẩn (SIC
+sicSector: Mô tả ngành dựa trên mã SIC
+sicIndustry: Xác định ngành dựa trên mã SIC
+famaSector: Có thể liên quan đến các ngành mô hình Fama-French. 
+famaIndustry: Có thể liên quan đến các ngành mô hình Fama-French. 
+currency: Đơn vị tiền tệ mà cổ phiếu của công ty được giao dịch
+location: Địa điểm của trụ sở công ty
+id: Một định danh duy nhất cho mục nhập công ty
+
+Alpha Vantage API for market-status:
+Dữ liệu này cung cấp thông tin về các khu vực và các sàn chứng khoán tại khu vực đó. Dưới đây là mô tả của các thuộc tính trong file JSON trả về:
+market_type: Loại thị trường
+region: Khu vực của thị trường
+primary_exchanges: Các sàn giao dịch chính của thị trường.
+local_open: Thời gian mở cửa địa phương của thị trường. 
+local_close: Thời gian đóng cửa địa phương của thị trường. 
+current_status: Tình trạng hiện tại của thị trường
+
+Alpha Vantage API for news_sentiment:
+File JSON trả về các tin tức, bài báo phân tích thị trường.
+title: Tiêu đề của mục.
+url: Đường dẫn đến bài viết hoặc nguồn cung cấp.
+time_published: Thời gian xuất bản.
+authors: Tác giả của mục.
+summary: Tóm tắt nội dung của mục.
+source: Nguồn cung cấp thông tin.
+source_domain: Tên miền của nguồn cung cấp.
+topics: Danh sách các chủ đề liên quan đến mục.
+topic: Chủ đề.
+relevance_score: Điểm độ liên quan của bài viết đến chủ đề đó.
+overall_sentiment_score: Điểm cảm xúc tổng thể của bài báo.
+overall_sentiment_label: Nhãn mô tả cảm xúc tổng thể của bài báo.
+ticker_sentiment: Danh sách các cổ phiếu được đề cập trong bài báo và điểm cảm xúc của chúng.
+ticker: Mã cổ phiếu.
+relevance_score: Độ liên quan của bài báo đến cổ phiếu đó.
+ticker_sentiment_score: Điểm cảm xúc của bài báo cho cổ phiếu đó.
+ticker_sentiment_label: Nhãn mô tả cảm xúc của bài báo cho cổ phiếu đó.
+Chỉ số cảm xúc (sentiment_score_definition):
+Chỉ số liên quan (relevance_score_definition): 0 < x <= 1, điểm số càng cao thì độ liên quan càng cao.
+Polygon:
+File JSON trả về dữ liệu giao dịch của cổ phiếu sau 1 ngày giao dịch. Dưới đây là mô tả của các thuộc tính trong file JSON:
+T: Mã cổ phiếu.
+o: Giá mở cửa.
+h: Giá cao nhất.
+l: Giá thấp nhất.
+c: Giá đóng cửa.
+v: Khối lượng giao dịch.
+Khoảng thời gian Query API là khi nào ?
+sec-api.io: 
+API này sẽ được query vào 12h ngày cuối cùng của mỗi tháng để kiểm tra có công ty nào gia nhập thị trường hay không và có công ty nào bị loại khỏi sàn giao dịch hay không.
+Alpha Vantage API for market-status:
+API này sẽ được query vào 12h ngày cuối cùng của cuối mỗi tháng, nhưng có thể không cần thiết vì dữ liệu về thị trường và khu vực ít khi thay đổi.
+Alpha Vantage API for news_sentiment:
+API này sẽ được query vào các khung giờ giao dịch trong ngày (trước, trong và sau phiên giao dịch), để lấy các bài viết, tin tức về thị trường được xuất bản cùng với dữ liệu sentiment. 
+Polygon:
+API này sẽ được query vào 0h đầu ngày, vì dữ liệu ngày hôm nay qua ngày mai mới có thể truy cập (hạn chế của việc sử dụng free). Mỗi lần query sẽ lấy chỉ số OHLC của tất cả các cổ phiếu hiện đang giao dịch tại thị trường Mỹ.
+Phạm vi dữ liệu là gì ?
+Dữ liệu được lấy có phạm vi tại thị trường chứng khoán Mỹ bao gồm các cổ phiếu đang có mặt tại các sàn giao dịch NYSE, NASDAQ (USD).
+Dữ liệu chỉ số OHCL được lấy từ ngày 01-01-2024 đến thời điểm hiện tại và cập nhật qua từng ngày.
+Các bài viết, tin tức được lấy từ ngày 01-01-2024 đến thời điểm hiện tại và cập nhật qua từng giờ. Bao gồm tất cả các topic có liên quan đến thị trường chứng khoán như: Blockchain, Economy - Fiscal Policy (e.g., tax reform, government spending), Economy - Monetary Policy (e.g., interest rates, inflation), Economy - Macro/Overall, Energy & Transportation, Finance, …
+Khối lượng data cần xử lý sau khi đưa về là bao nhiêu ?
+Để ước tính khối lượng cho dữ liệu cần xử lý, ta cần xem xét cách query dữ liệu và phạm vi dữ liệu
+Dữ liệu về OHLC: khoảng 10000 dòng dữ liệu được truy vấn mỗi ngày (mỗi dòng là chỉ số OHLC của một mã cổ phiếu). Trừ những ngày thị trường đóng cửa thì không có dữ liệu mới.
+Dữ liệu về các bài viết: khoảng 100 bài viết được truy vấn mỗi ngày. (có thể hơn trong những ngày thị trường biến động mạnh)
+Dữ liệu về công ty: Chứa khoảng 28000 dòng tương đương với 28000 cổ phiếu. Dữ liệu này khi cập nhật sẽ thêm các cổ phiếu mới gia nhập vào thị trường và cập nhật các cổ phiếu nào đã bị loại ra khỏi thị trường.
+Thiết kế Database lưu trữ dữ liệu từ sec-api.io và Alpha Vantage API for market status
+Ta có thể thấy 2 API sec-api.io và Alpha Vantage API for market status không cần phải query thường xuyên như 2 API còn lại vì dữ liệu trong 2 API này hiếm khi thay đổi và chỉ cần cập nhật vào cuối tháng. 
+Do đó, ta sẽ lưu dữ liệu từ 2 API này vào Database nhằm giả lập Backend Database làm Data Source thêm đa dạng
+Database được chuẩn hóa 3NF gồm 5 table sau:
+
+Xác định các bài toán được đặt ra
+Từ dữ liệu thu được đặt ra các bài toán cần xử lý từ đó xác định các Data Mart và thiết kế Data Warehouse
+Business Requirement #1: Phân tích xu hướng giá cổ phiếu
+Theo dõi chỉ số OHLC của từng cổ phiếu sau mỗi ngày giao dịch. 
+Theo dõi xu hướng giá của từng cổ phiếu theo các mốc thời gian khác nhau (ngày, tuần, tháng, quý, năm).
+Xác định các cổ phiếu có xu hướng tăng, giảm hoặc đi ngang trong một khoảng thời gian nhất định. 
+Dự đoán xu hướng giá tương lai của các cổ phiếu dựa trên dữ liệu lịch sử và các chỉ số phân tích khác.
+Business Requirement #2: Phân tích thị trường
+Theo dõi cảm xúc chung của thị trường (bullish, bearish, neutral) dựa trên các nguồn dữ liệu khác nhau (mạng xã hội, tin tức, diễn đàn tài chính).
+Xác định các chủ đề ảnh hưởng đến tâm lý thị trường (sự kiện kinh tế, chính trị, v.v.).
+Phân tích sentiment của các chủ đề tin tức (tích cực, tiêu cực, trung lập).
+Phân tích tác động của các chủ đề tin tức đến giá cổ phiếu.
+Business Requirement #3: Phân tích khối lượng giao dịch
+Theo dõi khối lượng giao dịch của từng cổ phiếu theo ngày, tuần, tháng.
+Xác định các cổ phiếu có khối lượng giao dịch cao bất thường.
+Phân tích mối quan hệ giữa khối lượng giao dịch và giá cổ phiếu.
+Business Requirement #4: Phân tích các nhóm ngành
+Xác định và phân tích các nhóm ngành trên thị trường chứng khoán.
+Đánh giá hiệu quả hoạt động của từng nhóm ngành.
+Xác định các nhóm ngành tiềm năng đầu tư
+Trích xuất dữ liệu gì để giải quyết các bài toán ?
+Thiết kế bảng Dimension và bảng Fact cho các Business Requirement từ Data Source là 2 API và 1 Database
+Bảng Dimension:
+Bảng Dim Companies:
+companyId (PK)
+name: Tên của công ty. 
+ticker: Ký hiệu công ty trên sàn giao dịch chứng khoán
+isDelisted: Một giá trị boolean cho biết liệu cổ phiếu của công ty đã bị loại khỏi sàn giao dịch hay không. 
+category: Mô tả hạng mục của cổ phiếu của công ty
+currency: Đơn vị tiền tệ mà cổ phiếu của công ty được giao dịch
+location: Địa điểm của trụ sở công ty
+exchange: Tên sàn giao dịch
+region: Khu vực
+industry: Ngành cụ thể mà công ty hoạt động 
+sector: Ngành của công ty `
+sicIndustry: Xác định ngành dựa trên mã SIC
+sicSector: Mô tả ngành dựa trên mã SIC `
+Bảng Dim News:
+newId (PK)
+title: Tiêu đề của bài viết.
+url: Đường dẫn đến bài viết hoặc nguồn cung cấp
+timePublished: Thời gian xuất bản
+author: nhóm tác giả
+summary: Tóm tắt nội dung
+source: Nguồn cung cấp
+source_domain: Tên miền của nguồn
+overall_sentiment_score: Điểm cảm xúc tổng thể của bài viết
+overall_sentiment_label: Nhãn mô tả cảm xúc tổng thể của bài viết.
+Bảng Dim Topics:
+topicId (PK)
+topicName: Tên topic
+Bảng Dim Times:
+timeId (PK)
+dayOfWeek: ngày trong tuần
+day: ngày
+month: tháng
+quarter: quý
+year: năm
+Bảng Fact News_Topics:
+topicNewId (PK)
+newId (FK)
+topicId (FK)
+relevance_score: Điểm độ liên quan của bài viết đến chủ đề đó.
+Bảng Fact News_Companies:
+newCompanyId (PK)
+newId (FK)
+companyId (FK)
+relevance_score: Độ liên quan của bài báo đến cổ phiếu đó.
+ticker_sentiment_score: Điểm cảm xúc của bài báo cho cổ phiếu đó.
+ticker_sentiment_label: Nhãn mô tả cảm xúc của bài báo cho cổ phiếu đó.
+Bảng Fact Candles:
+candleId (PK)
+companyId (FK)
+timeId (PK)
+open: Giá mở cửa
+high: Giá cao nhất
+low: Giá thấp nhất
+close: Giá đóng cửa
+volume: Khối lượng giao dịch.
+Galaxy Schema
+Từ thiết kế các bảng Fact và Dimension ở phần trước ta vẽ được sơ đồ sau
+
+Thiết kế hệ thống ELT
+ELT Diagram
+
+Taskflow
+
+ELT Tools
+
+ELT BPMN
+
+
+File System
+
+
+
+
+Thiết kế DAGs
+
+
+
+Data Flow Diagram
+
+
+
+Chương II: Plan and Implement
+Cấu hình môi trường dự án 
+Cài đặt, cấu hình Google Compute Engine
+Yêu cầu:
+Máy đã có VS code
+Đã có tài khoản GCP
+Hướng dẫn:
+Cài đặt extension Remote-SSH trên VS code
+
+Cài đặt, cấu hình Hadoop (Single Node) - HDFS, YARN
+Thực hiện theo các bước hướng dẫn trong link sau 
+Cài đặt, cấu hình Python, PostgreSQL, DuckDB
+Thực hiện theo các bước hướng dẫn trong link sau 
+Cài đặt, cấu hình Spark trên cụm Hadoop
+Thực hiện theo các bước hướng dẫn trong link sau 
+Cài đặt, cấu hình Airflow
+
+
+
+Thực thi dự án
+Tất cả tiến độ dự án được cập nhật mỗi ngày trên Github
+
+
+
+
+
+
+
+
