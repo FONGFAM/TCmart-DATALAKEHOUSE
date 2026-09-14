@@ -22,6 +22,9 @@ services:
       - "8088:8088"
     volumes:
       - superset_data:/app/superset_home
+      - ./superset-init.sh:/app/superset-init.sh
+    user: root # Needed to install pip packages globally
+    command: ["/bin/bash", "/app/superset-init.sh"]
     mem_limit: 768m
     mem_reservation: 512m
     cpus: 0.5
