@@ -67,7 +67,7 @@ GO
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[cashier_shifts]') AND type = N'U')
 BEGIN
     CREATE TABLE [dbo].[cashier_shifts] (
-        [shift_id]               VARCHAR(40)     NOT NULL,
+        [shift_id]               VARCHAR(60)     NOT NULL,
         [store_id]               VARCHAR(20)     NOT NULL,
         [terminal_id]            VARCHAR(20)     NOT NULL,
         [cashier_id]             VARCHAR(20)     NOT NULL,  -- Mã nhân viên (source of Dim_Cashier)
@@ -202,7 +202,7 @@ BEGIN
         [invoice_id]             VARCHAR(40)     NOT NULL,  -- UUID
         [store_id]               VARCHAR(20)     NOT NULL,
         [terminal_id]            VARCHAR(20)     NOT NULL,
-        [shift_id]               VARCHAR(40)     NOT NULL,
+        [shift_id]               VARCHAR(60)     NOT NULL,
         [cashier_id]             VARCHAR(20)     NOT NULL,
         [customer_id]            BIGINT          NULL,      -- NULL nếu khách vãng lai
         [invoice_date]           DATETIME        NOT NULL,

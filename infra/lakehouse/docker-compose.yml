@@ -35,7 +35,10 @@ services:
 
   # ─── Airflow — Orchestration ──────────────────────────────
   airflow:
-    image: apache/airflow:2.9.3-python3.10
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: tcmart-airflow:latest
     container_name: tcmart-airflow
     depends_on:
       - airflow-db
@@ -43,25 +46,23 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
       AIRFLOW__CORE__FERNET_KEY: ''
-      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: 30
       # Giới hạn concurrency để tránh OOM
-      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 2
-      AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP: 2
+      AIRFLOW__CORE__PARALLELISM: 1
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 1
+      AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP: 1
+      AIRFLOW__WEBSERVER__WORKERS: 1
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: 300
     volumes:
       - ../../src/orchestration/dags:/opt/airflow/dags:ro
       - ../../src/orchestration/plugins:/opt/airflow/plugins:ro
       - airflow_logs:/opt/airflow/logs
     ports:
       - "8080:8080"
-    mem_limit: 1g
-    mem_reservation: 512m
-    cpus: 0.75
+    mem_limit: 1.5g
+    mem_reservation: 1g
+    cpus: 1.0
     command: >
-      bash -c "airflow db migrate && airflow users create --username admin --password admin
-        --firstname Admin --lastname User --role Admin --email admin@tcmart.vn
-        && airflow webserver"
+      bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@tcmart.vn ; airflow scheduler & exec airflow webserver"
     restart: unless-stopped
 
   # ─── Airflow DB (PostgreSQL riêng) ───────────────────────
@@ -82,7 +83,7 @@ services:
   # ─── FastAPI Data Steward ─────────────────────────────────
   data-steward:
     build:
-      context: ../../src/steward
+      context: ../../src/steward_app
       dockerfile: Dockerfile
     container_name: tcmart-steward
     environment:
@@ -99,3 +100,4 @@ services:
 volumes:
   clickhouse_data:
   airflow_db_data:
+  airflow_logs:

@@ -60,7 +60,7 @@ def run_spark_ingest(table_name: str, mode: str = "incremental",
         .config("spark.driver.memory", "512m")
         .config("spark.executor.cores", "1")
         .config("spark.sql.shuffle.partitions", "4")
-        .config("spark.jars", "/opt/spark/jars/mssql-jdbc-12.6.0.jre11.jar")
+        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.microsoft.sqlserver:mssql-jdbc:12.6.0.jre11")
         .config("spark.hadoop.fs.s3a.endpoint", MINIO_ENDPOINT)
         .config("spark.hadoop.fs.s3a.access.key", MINIO_ACCESS)
         .config("spark.hadoop.fs.s3a.secret.key", MINIO_SECRET)
@@ -244,5 +244,9 @@ with DAG(
     # Dimensions trước
     start >> [t_products, t_barcodes, t_stores, t_price_books, t_customers]
     # Fact tables sau Dimensions
-    [t_products, t_stores] >> t_invoices >> [t_items, t_tenders]
-    [t_items, t_tenders] >> [t_shifts, t_returns, t_inventory] >> end
+    [t_products, t_stores] >> t_invoices
+    t_invoices >> [t_items, t_tenders]
+    
+    join_node = EmptyOperator(task_id='join_node')
+    [t_items, t_tenders] >> join_node
+    join_node >> [t_shifts, t_returns, t_inventory] >> end

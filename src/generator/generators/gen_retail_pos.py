@@ -118,7 +118,7 @@ def gen_stores(engine, n: int) -> list[dict]:
         conn.execute(text("DELETE FROM dbo.products"))
         conn.execute(text("DELETE FROM dbo.pos_terminals"))
         conn.execute(text("DELETE FROM dbo.stores"))
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.stores
                     (store_id, store_name, store_format, region_id, address, city, district,
                      floor_area_sqm, is_active, opened_date)
@@ -143,7 +143,7 @@ def gen_terminals(engine, stores: list) -> list[dict]:
                 "is_active": 1,
             })
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.pos_terminals
                     (terminal_id, store_id, mac_address, ip_address, is_self_checkout, is_active)
                     VALUES (:terminal_id, :store_id, :mac_address, :ip_address, :is_self_checkout, :is_active)"""),
@@ -197,7 +197,7 @@ def gen_products(engine, n: int) -> list[dict]:
             })
 
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.products
                     (product_id, product_name, department, category_name, base_uom,
                      is_weighted, vat_rate, is_active)
@@ -205,7 +205,7 @@ def gen_products(engine, n: int) -> list[dict]:
                             :is_weighted, :vat_rate, :is_active)"""),
             products
         )
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.product_barcodes
                     (barcode, product_id, packaging_unit, conversion_factor, is_primary)
                     VALUES (:barcode, :product_id, :packaging_unit, :conversion_factor, :is_primary)"""),
@@ -228,7 +228,7 @@ def gen_price_books(engine, stores: list, products: list):
                 "effective_to": None,
             })
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.store_price_books
                     (store_id, product_id, retail_price, effective_from, effective_to)
                     VALUES (:store_id, :product_id, :retail_price, :effective_from, :effective_to)"""),
@@ -305,7 +305,7 @@ def gen_shifts(engine, stores: list, terminals: list, cashiers: list,
                     })
 
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.cashier_shifts
                     (shift_id, store_id, terminal_id, cashier_id, cashier_name,
                      opened_at, closed_at, opening_cash_float, system_expected_cash,
@@ -345,9 +345,11 @@ def gen_invoices_and_payments(
         for r in rows:
             barcode_lookup[r[0]] = r[1]
 
-    invoices, items, tenders, returns = [], [], [], []
+    invoices, items, tenders, returns, loyalty_tx, discounts = [], [], [], [], [], []
     n_duplicate = int(n_invoices * CONFIG["err_e1_duplicate_pct"])
     duplicate_invoices = []
+    
+    global_invoice_item_id = 1
 
     all_shifts_list = shifts.copy()
 
@@ -386,6 +388,9 @@ def gen_invoices_and_payments(
             total_gross += round(unit_price * qty, 2)
             total_discount += line_discount
 
+            invoice_item_id = global_invoice_item_id
+            global_invoice_item_id += 1
+
             # [E4] Cấy barcode lạ cho 2% items
             if random.random() < CONFIG["err_e4_bad_barcode_pct"]:
                 scanned_barcode = f"UNKNOWN_{random.randint(1000000000000, 9999999999999)}"
@@ -393,11 +398,20 @@ def gen_invoices_and_payments(
                 scanned_barcode = barcode_lookup.get(pid, "")
 
             invoice_items.append({
+                "invoice_item_id": invoice_item_id,
                 "invoice_id": invoice_id, "line_number": line_num,
                 "product_id": pid, "scanned_barcode": scanned_barcode,
                 "quantity": qty, "unit_price": unit_price,
                 "line_discount_amount": line_discount, "line_total_amount": line_total,
             })
+            
+            if line_discount > 0:
+                discounts.append({
+                    "invoice_item_id": invoice_item_id,
+                    "discount_type": "PROMO_CAMPAIGN" if discount_pct == 0.05 else "COMBO",
+                    "promo_reference_id": f"PROMO_{random.randint(100, 999)}",
+                    "discount_value": line_discount
+                })
 
         total_tax = round((total_gross - total_discount) * 0.08, 2)
         total_net = round(total_gross - total_discount + total_tax, 2)
@@ -413,6 +427,15 @@ def gen_invoices_and_payments(
             "status": "COMPLETED",
         })
         items.extend(invoice_items)
+        
+        if customer_id is not None:
+            loyalty_tx.append({
+                "customer_id": customer_id,
+                "invoice_id": invoice_id,
+                "points_earned": int(total_net / 10000),
+                "points_redeemed": 0,
+                "transaction_timestamp": inv_date
+            })
 
         # ─── Tạo payment tenders ────────────────────────────────────────────
         is_fx = random.random() < CONFIG["pct_fx_payment"]
@@ -488,7 +511,7 @@ def gen_invoices_and_payments(
     # Insert to DB
     print(f"  ⏳ Inserting {len(invoices)} invoices...")
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.sales_invoices
                     (invoice_id, store_id, terminal_id, shift_id, cashier_id, customer_id,
                      invoice_date, total_gross_amount, total_discount_amount,
@@ -517,17 +540,37 @@ def gen_invoices_and_payments(
                     pass  # PK violation expected — ghi log lỗi ở pipeline DQ
 
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(text("SET IDENTITY_INSERT dbo.sales_invoice_items ON"))
+        conn.execute(
             text("""INSERT INTO dbo.sales_invoice_items
-                    (invoice_id, line_number, product_id, scanned_barcode,
+                    (invoice_item_id, invoice_id, line_number, product_id, scanned_barcode,
                      quantity, unit_price, line_discount_amount, line_total_amount)
-                    VALUES (:invoice_id, :line_number, :product_id, :scanned_barcode,
+                    VALUES (:invoice_item_id, :invoice_id, :line_number, :product_id, :scanned_barcode,
                             :quantity, :unit_price, :line_discount_amount, :line_total_amount)"""),
             items
         )
+        conn.execute(text("SET IDENTITY_INSERT dbo.sales_invoice_items OFF"))
+        
+    with engine.begin() as conn:
+        if discounts:
+            conn.execute(
+                text("""INSERT INTO dbo.sales_item_discounts
+                        (invoice_item_id, discount_type, promo_reference_id, discount_value)
+                        VALUES (:invoice_item_id, :discount_type, :promo_reference_id, :discount_value)"""),
+                discounts
+            )
+            
+    with engine.begin() as conn:
+        if loyalty_tx:
+            conn.execute(
+                text("""INSERT INTO dbo.customer_loyalty_transactions
+                        (customer_id, invoice_id, points_earned, points_redeemed, transaction_timestamp)
+                        VALUES (:customer_id, :invoice_id, :points_earned, :points_redeemed, :transaction_timestamp)"""),
+                loyalty_tx
+            )
 
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.sales_payment_tenders
                     (invoice_id, payment_method, currency_code, exchange_rate,
                      tender_amount_original, tender_amount_vnd, change_amount_vnd)
@@ -537,7 +580,7 @@ def gen_invoices_and_payments(
         )
 
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.sales_returns
                     (return_id, original_invoice_id, store_id, return_timestamp,
                      product_id, returned_quantity, refund_amount_vnd, return_reason)
@@ -610,7 +653,7 @@ def gen_inventory_snapshots(engine, stores: list, products: list, days: int):
                     "damaged_loss_qty": round(random.uniform(0, 5), 3),
                 })
     with engine.begin() as conn:
-        conn.executemany(
+        conn.execute(
             text("""INSERT INTO dbo.store_inventory_snapshots
                     (store_id, product_id, snapshot_date, shelf_stock_qty,
                      backroom_stock_qty, damaged_loss_qty)
