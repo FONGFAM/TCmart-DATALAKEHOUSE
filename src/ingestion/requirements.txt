@@ -1,8 +1,0 @@
-boto3>=1.28.0
-pandas>=2.0.0
-python-dotenv>=1.0.0
-SQLAlchemy>=2.0.0
-psycopg2-binary>=2.9.9
-pymssql>=2.2.8
-pyarrow>=12.0.0
-oracledb>=2.0.0
